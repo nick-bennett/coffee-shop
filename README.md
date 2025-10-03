@@ -6,7 +6,23 @@ This is a simple queueing system simulation, modeling a coffee shop. Customers a
 
 ## Input
 
-All input parameters are read from YAML files.
+All input parameters are read from YAML files, as follows:
+
+### `config.yaml` properties
+
+- `servers`: array of `server` objects, each with the following properties.
+
+    - `name`: name used for server in logs
+    - `service-time`: mean time for this server to process an order
+
+- `customers`: single object, with the following property:
+
+    - `interarrival-time`: mean time between arrivals
+
+### `job.yaml` (optional)
+
+- `random-seed`: optional seed value (default is no seed) for random number generator (for reproducible runs)
+- `time-limit`: optional maximum run length (default is 100) of the simulation, in simulated time
 
 ## Output
 
@@ -26,6 +42,6 @@ This simulation does not prevent a graphical display, but instead logs all event
 ## Dependencies
 
 - Python 3.13.x
-- PyYAML 6.0.0
-- SimPy 4.1.0
-- NumPy 2.3.0
+- PyYAML 6.0.x
+- SimPy 4.1.x
+- NumPy 2.3.x
