@@ -22,7 +22,11 @@ All input parameters are read from YAML files, as follows:
 ### `job.yaml` (optional)
 
 - `random-seed`: optional seed value (default is no seed) for random number generator (for reproducible runs)
-- `time-limit`: optional maximum run length (default is 100) of the simulation, in simulated time
+
+- `time`: single object (optional), with the following properties:
+
+    - `limit`: optional maximum run length (default is 100) of the simulation, in simulated time
+    - `reset`: optional reset time for aggregate statistics (default is 0), to support system warm-up; on reset, the RESET event is logged.
 
 ## Output
 
@@ -30,17 +34,18 @@ All input parameters are read from YAML files, as follows:
 
 This simulation does not prevent a graphical display, but instead logs all events (arrivals, service starts, service completions) in simulated time order. The log entries are comma-delimited, with the following columns; the column name (shown in quotes) is in a header row in the first line of the output:
 
-- "Timestamp"
-- "Type" (ARRIVAL, SERVICE_START, or SERVICE_DONE)
-- "Customer" name (based on automatically generated numeric ID of customer)
-- "Server" name, if event is SERVICE_START or SERVICE_DONE; blank otherwise
-- Queue "Length" resulting after event is processed
-- Servers "Available" after event is processed
+- "Timestamp": simulated time of the event's occurrence.
+- Event "Type": One of ARRIVAL, SERVICE_START, SERVICE_DONE, or RESET.
+- "Customer" name: Identifier (based on automatically generated numeric ID of customer)—unless event is RESET, in which case this column is blank.
+- "Server" name: Identifier if event is SERVICE_START or SERVICE_DONE, and blank otherwise.
+- Queue "Length": Number of customers in queue after event processing.
+- Servers "Available": Number of idle servers after event processing.
 
 ### Order
 
 As stated above, events in the log are in simulation time order. For events that happen at the same time (e.g., an arrival into an empty queue and the immediate start of service), the order shown in the log will be:
 
+- RESET
 - ARRIVAL
 - SERVICE_DONE
 - SERVICE_START
