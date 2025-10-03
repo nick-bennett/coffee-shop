@@ -63,13 +63,14 @@ class Server:
 # ---------- Simulation ----------
 
 class CoffeeShopSim:
-    def __init__(self, env: simpy.Environment, servers: List[Server], interarrival_time: float, time_limit: float, rng: Optional[np.random.Generator] = None):
+    def __init__(self, env: simpy.Environment, servers: List[Server], interarrival_time: float, time_limit: float, rng: Optional[np.random.Generator] = None, reset_time: float = 0.0):
         self.env = env
         self.servers = servers
         self.N = len(servers)
         self.interarrival_time = float(interarrival_time)  # mean
         self.time_limit = float(time_limit)
         self.rng = rng or np.random.default_rng()
+        self.reset_time = float(reset_time or 0.0)
 
         # Queue of waiting customers (FIFO)
         self.queue: Deque[Customer] = deque()
@@ -90,6 +91,9 @@ class CoffeeShopSim:
         self.waiting_customers: Dict[int, Customer] = {}
         # Track in-service customers at any time
         self.in_service: Dict[int, Customer] = {}
+
+        # Measurement window start (for warm-up reset)
+        self.measurement_start_time: float = 0.0
 
         # Output: print CSV header immediately
         print("Timestamp,Type,Customer,Server,Length,Available")
@@ -169,8 +173,9 @@ class CoffeeShopSim:
             service_time = float(self.rng.exponential(scale=float(server.service_time)))
             customer.service_time = service_time
 
-            # Update stats for waiting time
-            wait_time = customer.service_start_time - customer.arrival_time
+            # Update stats for waiting time (only count time since measurement_start_time)
+            effective_arrival = max(customer.arrival_time, self.measurement_start_time)
+            wait_time = max(0.0, customer.service_start_time - effective_arrival)
             self.total_wait_time += wait_time
             self.count_started += 1
 
@@ -194,8 +199,10 @@ class CoffeeShopSim:
         yield self.env.timeout(service_time)
 
         # Service done: update stats, free server
-        self.total_service_time_completed += service_time
-        self.count_completed += 1
+        # Count only completions after measurement_start_time
+        if self.env.now >= self.measurement_start_time:
+            self.total_service_time_completed += service_time
+            self.count_completed += 1
 
         # Mark server free (update utilization accum through set_busy)
         server.set_busy(self.env.now, False)
@@ -212,24 +219,52 @@ class CoffeeShopSim:
 
     # ----- Run and finalization -----
     def run(self):
+        # Schedule reset (if any) before other processes to ensure RESET ordering precedence
+        if 0.0 < self.reset_time <= self.time_limit:
+            self.env.process(self.reset_process())
         # Start arrivals
         self.env.process(self.arrivals_process())
         # Run until time limit
         self.env.run(until=self.time_limit)
+
+    def reset_process(self):
+        # Wait until reset time, then reset measurement stats and log RESET
+        yield self.env.timeout(self.reset_time)
+        now = self.env.now
+        # Close out pre-reset queue area, then reset accumulators
+        self._update_q_time_area(now)
+        self.area_under_q = 0.0
+        self.last_q_change_time = now
+        # Max queue length should consider post-reset only; initialize to current q len
+        self.max_q_len = self.cur_q_len
+        # Reset waiting/service aggregates
+        self.total_wait_time = 0.0
+        self.count_started = 0
+        self.total_service_time_completed = 0.0
+        self.count_completed = 0
+        # Reset server utilization accumulators without changing busy state
+        for s in self.servers:
+            s.busy_time_accum = 0.0
+            s.last_state_change = now
+        # Set measurement window start
+        self.measurement_start_time = now
+        # Log RESET event (no customer/server)
+        self.log(now, "RESET", None, "")
 
     def finalize_and_print_stats(self):
         # Close out queue time area up to end time
         end_time = self.env.now
         self._update_q_time_area(end_time)
 
-        total_time = max(end_time, 0.0)
+        # Measurement window length (post-reset)
+        total_time = max(end_time - self.measurement_start_time, 0.0)
         avg_q_len = (self.area_under_q / total_time) if total_time > 0 else 0.0
         max_q_len = self.max_q_len
 
         # Queue stats
         queue_len_end = self.cur_q_len
         if self.waiting_customers:
-            avg_wait_remaining = sum(end_time - c.arrival_time for c in self.waiting_customers.values()) / len(self.waiting_customers)
+            avg_wait_remaining = sum(max(0.0, end_time - max(c.arrival_time, self.measurement_start_time)) for c in self.waiting_customers.values()) / len(self.waiting_customers)
         else:
             avg_wait_remaining = 0.0
 
@@ -280,7 +315,7 @@ def load_yaml(path: str) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def parse_inputs(config_path: str = "config.yaml", job_path: str = "job.yaml") -> Tuple[List[Server], float, float, Optional[int]]:
+def parse_inputs(config_path: str = "config.yaml", job_path: str = "job.yaml") -> Tuple[List[Server], float, float, Optional[int], float]:
     if not os.path.exists(config_path):
         print(f"ERROR: Missing required config file: {config_path}", file=sys.stderr)
         sys.exit(1)
@@ -330,14 +365,33 @@ def parse_inputs(config_path: str = "config.yaml", job_path: str = "job.yaml") -
     if os.path.exists(job_path):
         job = load_yaml(job_path)
 
-    time_limit = float(job.get("time-limit", 100))
+    # Support nested time object as per README, with backward compatibility for legacy 'time-limit'.
+    time_obj = job.get("time", {}) if isinstance(job.get("time", {}), dict) else {}
+    time_limit_val = time_obj.get("limit")
+    reset_val = time_obj.get("reset", 0)
+
+    if time_limit_val is None:
+        time_limit_val = job.get("time-limit", 100)
+
+    try:
+        time_limit = float(time_limit_val)
+    except Exception:
+        print("ERROR: time.limit or time-limit must be numeric.", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        reset_time = float(reset_val or 0)
+    except Exception:
+        print("ERROR: time.reset must be numeric if provided.", file=sys.stderr)
+        sys.exit(1)
+
     seed = job.get("random-seed")
     try:
         seed_val: Optional[int] = int(seed) if seed is not None else None
     except Exception:
         seed_val = None
 
-    return servers, interarrival_time, time_limit, seed_val
+    return servers, interarrival_time, time_limit, seed_val, reset_time
 
 
 # ---------- Entry point ----------
@@ -351,13 +405,13 @@ def main(argv: List[str]) -> int:
     if len(argv) >= 3:
         job_path = argv[2]
 
-    servers, interarrival_time, time_limit, seed = parse_inputs(config_path, job_path)
+    servers, interarrival_time, time_limit, seed, reset_time = parse_inputs(config_path, job_path)
 
     # Initialize NumPy RNG with optional seed for reproducibility
     rng = np.random.default_rng(seed) if seed is not None else np.random.default_rng()
 
     env = simpy.Environment()
-    sim = CoffeeShopSim(env, servers, interarrival_time, time_limit, rng)
+    sim = CoffeeShopSim(env, servers, interarrival_time, time_limit, rng, reset_time)
     sim.run()
     sim.finalize_and_print_stats()
     return 0

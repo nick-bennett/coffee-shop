@@ -2,4 +2,6 @@
 # Note: random-seed is optional; we omit it to indicate "no seed"
 # random-seed: 12345
 
-time-limit: 1000
+time:
+  limit: 1000
+  reset: 200
