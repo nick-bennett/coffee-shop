@@ -26,9 +26,19 @@ All input parameters are read from YAML files, as follows:
 
 ## Output
 
-This simulation does not prevent a graphical display, but instead logs all events (arrivals, service starts, service completions) in simulated time order. As the simulation proceeds, the system keeps track of aggregate statistics, displaying these at the end of the simulation:
+This simulation does not prevent a graphical display, but instead logs all events (arrivals, service starts, service completions) in simulated time order. The log entries are comma-delimited, with the following columns; the column name (shown in quotes) is in a header row in the first line of the output:
+
+- "Timestamp"
+- "Event type" (ARRIVAL, SERVICE_START, or SERVICE_DONE)
+- "Customer" name (based on automatically generated numeric ID of customer)
+- "Server" name, if event is SERVICE_START or SERVICE_DONE; blank otherwise
+- Queue "Length" resulting after event is processed
+- Servers "Available" after event is processed
+
+As the simulation proceeds, the system keeps track of aggregate statistics, displaying these at the end of the simulation:
 
 - Average queue length
+- Maximum queue length
 - Average time spent in the queue
 - Queue length at the end of the simulation
 - Average time spent in the queue by those customers still in the queue at the end of the simulation
