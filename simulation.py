@@ -3,9 +3,9 @@
 Coffee Shop queueing simulation
 
 Implements the simulation and output logic described in README.md using
-- deterministic interarrival times (from config.yaml -> customers.interarrival-time)
-- deterministic, per-server service times (from config.yaml -> servers[].service-time)
-- optional job.yaml for time-limit (default 100) and random-seed (not used for deterministic logic)
+- exponentially distributed interarrival times (mean from config.yaml -> customers.interarrival-time)
+- exponentially distributed, per-server service times (mean from config.yaml -> servers[].service-time)
+- optional job.yaml for time-limit (default 100) and random-seed (used to seed RNG)
 
 Outputs:
 - CSV event log to stdout with columns:
@@ -23,6 +23,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Deque, Dict, List, Optional, Tuple
 
+import numpy as np
 import simpy
 import yaml
 
@@ -36,14 +37,14 @@ class Customer:
     # will be set when service starts
     service_start_time: Optional[float] = None
     server_name: Optional[str] = None
-    # constant service time chosen when assigned (depends on server)
+    # sampled service time chosen when assigned (depends on server mean)
     service_time: Optional[float] = None
 
 
 @dataclass
 class Server:
     name: str
-    service_time: float
+    service_time: float  # mean service time
     busy: bool = False
     # For utilization tracking
     busy_time_accum: float = 0.0
@@ -62,12 +63,13 @@ class Server:
 # ---------- Simulation ----------
 
 class CoffeeShopSim:
-    def __init__(self, env: simpy.Environment, servers: List[Server], interarrival_time: float, time_limit: float):
+    def __init__(self, env: simpy.Environment, servers: List[Server], interarrival_time: float, time_limit: float, rng: Optional[np.random.Generator] = None):
         self.env = env
         self.servers = servers
         self.N = len(servers)
-        self.interarrival_time = float(interarrival_time)
+        self.interarrival_time = float(interarrival_time)  # mean
         self.time_limit = float(time_limit)
+        self.rng = rng or np.random.default_rng()
 
         # Queue of waiting customers (FIFO)
         self.queue: Deque[Customer] = deque()
@@ -133,14 +135,15 @@ class CoffeeShopSim:
             # Defer dispatch so SERVICE_START happens after ARRIVAL/DONE at same time
             self.env.process(self._deferred_dispatch())
 
-            # Schedule next arrival (no priority; ordering is ensured by creation order and deferred dispatch)
-            next_time = self.env.now + self.interarrival_time
+            # Schedule next arrival using exponential with given mean
+            interarrival = float(self.rng.exponential(scale=self.interarrival_time))
+            next_time = self.env.now + interarrival
             if next_time > self.time_limit:
                 # Advance to time_limit to allow servers to continue processing, then stop arrivals
                 yield self.env.timeout(self.time_limit - self.env.now)
                 break
             else:
-                yield self.env.timeout(self.interarrival_time)
+                yield self.env.timeout(interarrival)
 
     def _deferred_dispatch(self):
         # Ensure SERVICE_START is scheduled after ARRIVAL and SERVICE_DONE at the same timestamp
@@ -162,7 +165,9 @@ class CoffeeShopSim:
             # Assign attributes
             customer.service_start_time = self.env.now
             customer.server_name = server.name
-            customer.service_time = server.service_time
+            # Sample service time from exponential with server's mean
+            service_time = float(self.rng.exponential(scale=float(server.service_time)))
+            customer.service_time = service_time
 
             # Update stats for waiting time
             wait_time = customer.service_start_time - customer.arrival_time
@@ -183,8 +188,8 @@ class CoffeeShopSim:
             self.env.process(self.service_process(customer, server))
 
     def service_process(self, customer: Customer, server: Server):
-        # Deterministic service time per server
-        service_time = float(server.service_time)
+        # Use the sampled service time stored on the customer
+        service_time = float(customer.service_time or 0.0)
         # Advance time
         yield self.env.timeout(service_time)
 
@@ -302,6 +307,9 @@ def parse_inputs(config_path: str = "config.yaml", job_path: str = "job.yaml") -
         except Exception:
             print(f"ERROR: service-time for server '{name}' must be numeric.", file=sys.stderr)
             sys.exit(1)
+        if st_val <= 0.0:
+            print(f"ERROR: service-time for server '{name}' must be > 0.", file=sys.stderr)
+            sys.exit(1)
         servers.append(Server(name=str(name), service_time=st_val))
 
     customers = config.get("customers", {})
@@ -313,6 +321,9 @@ def parse_inputs(config_path: str = "config.yaml", job_path: str = "job.yaml") -
         interarrival_time = float(customers["interarrival-time"])    
     except Exception:
         print("ERROR: customers.interarrival-time must be numeric.", file=sys.stderr)
+        sys.exit(1)
+    if interarrival_time <= 0.0:
+        print("ERROR: customers.interarrival-time must be > 0.", file=sys.stderr)
         sys.exit(1)
 
     job: dict = {}
@@ -342,16 +353,11 @@ def main(argv: List[str]) -> int:
 
     servers, interarrival_time, time_limit, seed = parse_inputs(config_path, job_path)
 
-    # Deterministic model doesn't use RNG, but honor seed for completeness if needed later
-    if seed is not None:
-        try:
-            import random
-            random.seed(seed)
-        except Exception:
-            pass
+    # Initialize NumPy RNG with optional seed for reproducibility
+    rng = np.random.default_rng(seed) if seed is not None else np.random.default_rng()
 
     env = simpy.Environment()
-    sim = CoffeeShopSim(env, servers, interarrival_time, time_limit)
+    sim = CoffeeShopSim(env, servers, interarrival_time, time_limit, rng)
     sim.run()
     sim.finalize_and_print_stats()
     return 0
