@@ -26,14 +26,30 @@ All input parameters are read from YAML files, as follows:
 
 ## Output
 
+### Structure
+
 This simulation does not prevent a graphical display, but instead logs all events (arrivals, service starts, service completions) in simulated time order. The log entries are comma-delimited, with the following columns; the column name (shown in quotes) is in a header row in the first line of the output:
 
 - "Timestamp"
-- "Event type" (ARRIVAL, SERVICE_START, or SERVICE_DONE)
+- "Type" (ARRIVAL, SERVICE_START, or SERVICE_DONE)
 - "Customer" name (based on automatically generated numeric ID of customer)
 - "Server" name, if event is SERVICE_START or SERVICE_DONE; blank otherwise
 - Queue "Length" resulting after event is processed
 - Servers "Available" after event is processed
+
+### Order
+
+As stated above, events in the log are in simulation time order. For events that happen at the same time (e.g., an arrival into an empty queue and the immediate start of service), the order shown in the log will be:
+
+- ARRIVAL
+- SERVICE_DONE
+- SERVICE_START
+
+If multiple events of the same type occur at the same time, those events will be ordered by customer ID, then server name, both ascending.
+
+### Queue length and server availability measurement basis
+
+The queue length logged for ARRIVAL and SERVICE_START events is the queue length resulting from the event. Similarly, the servers available logged for a SERVICE_START or SERVICE_DONE event is the number resulting from the event.
 
 As the simulation proceeds, the system keeps track of aggregate statistics, displaying these at the end of the simulation:
 
