@@ -26,3 +26,11 @@ This simulation does not prevent a graphical display, but instead logs all event
 ## Dependencies
 
 - Python 3.13.x
+- PyYAML (for reading YAML input files)
+- SimPy (for discrete-event simulation)
+- NumPy (for numerical computations and statistics)
+
+Optional (nice to have):
+- pandas (optional; for post-run analysis of logs and aggregates)
+- matplotlib or seaborn (optional; for plotting results)
+- pytest (optional; for testing)
