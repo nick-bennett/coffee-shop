@@ -1,0 +1,95 @@
+# ------------------------------
+# OS files
+# ------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ------------------------------
+# IDEs and editors
+# ------------------------------
+# IntelliJ IDEA / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Eclipse
+.project
+.classpath
+.settings/
+.loadpath
+.recommenders/
+
+# NetBeans
+nbproject/private/
+dist/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# VS Code
+.vscode/
+
+# Vim / Emacs / other editors
+*~
+.*.swp
+.*.swo
+.sass-cache/
+
+# ------------------------------
+# Build systems and artifacts
+# ------------------------------
+# Gradle
+.gradle/
+**/build/
+# If you prefer to ignore Gradle wrapper caches (optional):
+# gradle/wrapper/gradle-wrapper.jar
+
+# Maven
+**/target/
+.mvn/timing.properties
+# Keep the Maven wrapper scripts and jar; do not ignore mvnw, mvnw.cmd, or .mvn/wrapper/*
+
+# SBT
+project/target/
+project/project/
+
+# Common Java/JVM outputs
+out/
+bin/
+classes/
+
+# Logs and temp files
+*.log
+logs/
+.temp/
+.tmp/
+*.tmp
+hs_err_pid*
+replay_pid*
+
+# ------------------------------
+# Packaging
+# ------------------------------
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# ------------------------------
+# Misc
+# ------------------------------
+# Ignore local environment files
+.env
+.env.*
+
+# End of .gitignore
