@@ -26,6 +26,6 @@ This simulation does not prevent a graphical display, but instead logs all event
 ## Dependencies
 
 - Python 3.13.x
-- PyYAML
-- SimPy
-- NumPy
+- PyYAML 6.0.0
+- SimPy 4.1.0
+- NumPy 2.3.0
