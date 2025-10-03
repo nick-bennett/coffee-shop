@@ -90,7 +90,7 @@ class CoffeeShopSim:
         self.in_service: Dict[int, Customer] = {}
 
         # Output: print CSV header immediately
-        print("Timestamp,Event type,Customer,Server,Length,Available")
+        print("Timestamp,Type,Customer,Server,Length,Available")
 
     # ----- Logging helpers -----
     def _update_q_time_area(self, now: float) -> None:
@@ -116,7 +116,7 @@ class CoffeeShopSim:
     # ----- Processes -----
     def arrivals_process(self):
         while True:
-            # Next arrival time
+            # Stop if current time exceeded time limit
             if self.env.now > self.time_limit:
                 break
             # Create and process arrival at current time
@@ -130,17 +130,23 @@ class CoffeeShopSim:
             # ARRIVAL log (servers availability unchanged by arrival itself)
             self.log(self.env.now, "ARRIVAL", c)
 
-            # Immediately try to dispatch after arrival
-            self.try_dispatch()
+            # Defer dispatch so SERVICE_START happens after ARRIVAL/DONE at same time
+            self.env.process(self._deferred_dispatch())
 
-            # Schedule next arrival
+            # Schedule next arrival with priority -1 to ensure ARRIVAL comes before DONE/START at same time
             next_time = self.env.now + self.interarrival_time
             if next_time > self.time_limit:
-                # Move to time_limit to allow servers to continue processing, then stop arrivals
-                yield self.env.timeout(self.time_limit - self.env.now)
+                # Advance to time_limit to allow servers to continue processing, then stop arrivals
+                yield self.env.timeout(self.time_limit - self.env.now, priority=-1)
                 break
             else:
-                yield self.env.timeout(self.interarrival_time)
+                yield self.env.timeout(self.interarrival_time, priority=-1)
+
+    def _deferred_dispatch(self):
+        # Ensure SERVICE_START is scheduled after ARRIVAL and SERVICE_DONE at the same timestamp
+        # by deferring dispatch to a zero-timeout with higher priority.
+        yield self.env.timeout(0, priority=1)
+        self.try_dispatch()
 
     def try_dispatch(self):
         # While there is at least one free server and a waiting customer, start service
@@ -196,8 +202,8 @@ class CoffeeShopSim:
         # Log SERVICE_DONE (queue length unchanged)
         self.log(self.env.now, "SERVICE_DONE", customer, customer.server_name or server.name)
 
-        # After completing service, immediately try to dispatch next customer if available
-        self.try_dispatch()
+        # After completing service, defer dispatch so SERVICE_START occurs after DONE at same timestamp
+        self.env.process(self._deferred_dispatch())
 
     # ----- Run and finalization -----
     def run(self):
