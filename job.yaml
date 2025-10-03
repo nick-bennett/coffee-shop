@@ -1,0 +1,5 @@
+# Example job configuration adhering to README Input schema
+# Note: random-seed is optional; we omit it to indicate "no seed"
+# random-seed: 12345
+
+time-limit: 100
