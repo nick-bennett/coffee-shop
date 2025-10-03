@@ -133,19 +133,19 @@ class CoffeeShopSim:
             # Defer dispatch so SERVICE_START happens after ARRIVAL/DONE at same time
             self.env.process(self._deferred_dispatch())
 
-            # Schedule next arrival with priority -1 to ensure ARRIVAL comes before DONE/START at same time
+            # Schedule next arrival (no priority; ordering is ensured by creation order and deferred dispatch)
             next_time = self.env.now + self.interarrival_time
             if next_time > self.time_limit:
                 # Advance to time_limit to allow servers to continue processing, then stop arrivals
-                yield self.env.timeout(self.time_limit - self.env.now, priority=-1)
+                yield self.env.timeout(self.time_limit - self.env.now)
                 break
             else:
-                yield self.env.timeout(self.interarrival_time, priority=-1)
+                yield self.env.timeout(self.interarrival_time)
 
     def _deferred_dispatch(self):
         # Ensure SERVICE_START is scheduled after ARRIVAL and SERVICE_DONE at the same timestamp
-        # by deferring dispatch to a zero-timeout with higher priority.
-        yield self.env.timeout(0, priority=1)
+        # by deferring dispatch to a zero-timeout; SimPy processes same-time events in creation order.
+        yield self.env.timeout(0)
         self.try_dispatch()
 
     def try_dispatch(self):
