@@ -1,7 +1,9 @@
 # Example configuration adhering to README Input schema
 servers:
-  - name: server-1
+  - name: expert
     service-time: 3
+  - name: trainee
+    service-time: 4
 
 customers:
   interarrival-time: 3
