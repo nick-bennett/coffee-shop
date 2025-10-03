@@ -16,7 +16,6 @@ This implementation uses SimPy to advance simulated time while controlling
 assignments through a simple FIFO queue and explicit server processes to
 preserve server names in logs.
 """
-from __future__ import annotations
 
 import os
 import sys
